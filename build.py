@@ -73,6 +73,7 @@ def islug(lbl): return lbl.replace("#","no").replace("/","-")
 
 # ───────────────────────── TEMPLATING ─────────────────────────
 PAGES = []   # (url path, lastmod)
+GV = f'<meta name="google-site-verification" content="{CFG["google_verification"]}">' if CFG.get("google_verification") else ""
 def amazon(q, text):
     u = "https://www.amazon.com/s?k=" + urllib.parse.quote_plus(q)
     if CFG["amazon_tag"]: u += "&tag=" + CFG["amazon_tag"]
@@ -125,7 +126,7 @@ def page(path, title, desc, body, crumbs=()):
     out.write_text(f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0e1420">
 <title>{html.escape(title)}</title><meta name="description" content="{html.escape(desc)}">
-<link rel="canonical" href="{BASE}{url}"><link rel="icon" href="/favicon.svg">
+<link rel="canonical" href="{BASE}{url}">{GV}<link rel="icon" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">{adjs}</head><body>
