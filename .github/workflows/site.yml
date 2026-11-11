@@ -1,0 +1,47 @@
+name: site
+on:
+  push: { branches: [main] }
+  schedule: [{ cron: "17 3 * * 1" }]   # weekly health check, Mondays
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: python test_build.py
+      - uses: actions/upload-artifact@v4
+        with: { name: dist, path: dist/urls.txt }
+  indexnow:            # tells Bing/Yandex/Seznam etc. about every URL after each deploy
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: dist }
+      - run: |
+          BASE=$(python -c "import json;print(json.load(open('config.json'))['base_url'].rstrip('/'))")
+          KEY=$(python -c "import json;print(json.load(open('config.json'))['indexnow_key'])")
+          case "$BASE" in *YOUR-PROJECT*) echo "base_url not set, skipping"; exit 0;; esac
+          [ -z "$KEY" ] && exit 0
+          for i in $(seq 1 20); do   # wait for the host to finish deploying the key file
+            [ "$(curl -s $BASE/$KEY.txt)" = "$KEY" ] && break; sleep 30; done
+          python - "$BASE" "$KEY" <<'PY'
+          import json,sys,urllib.request
+          base,key=sys.argv[1:]; urls=open('urls.txt').read().split()
+          body=json.dumps({"host":base.split('//')[1],"key":key,"keyLocation":f"{base}/{key}.txt","urlList":urls}).encode()
+          r=urllib.request.urlopen(urllib.request.Request("https://api.indexnow.org/indexnow",body,{"Content-Type":"application/json; charset=utf-8"}))
+          print("IndexNow:",r.status,len(urls),"urls")
+          PY
+  health:              # a failed run emails you automatically
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          BASE=$(python -c "import json;print(json.load(open('config.json'))['base_url'].rstrip('/'))")
+          case "$BASE" in *YOUR-PROJECT*) exit 0;; esac
+          curl -fsS "$BASE/sitemap.xml" | grep -c "<loc>"
+          curl -fsS "$BASE/metric-bolt-torque/m10x1.5-class-8.8/" | grep -q "N·m"
