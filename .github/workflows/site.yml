@@ -28,13 +28,12 @@ jobs:
           [ -z "$KEY" ] && exit 0
           for i in $(seq 1 20); do   # wait for the host to finish deploying the key file
             [ "$(curl -s $BASE/$KEY.txt)" = "$KEY" ] && break; sleep 30; done
-          python - "$BASE" "$KEY" <<'PY'
-          import json,sys,urllib.request
-          base,key=sys.argv[1:]; urls=open('urls.txt').read().split()
-          body=json.dumps({"host":base.split('//')[1],"key":key,"keyLocation":f"{base}/{key}.txt","urlList":urls}).encode()
-          r=urllib.request.urlopen(urllib.request.Request("https://api.indexnow.org/indexnow",body,{"Content-Type":"application/json; charset=utf-8"}))
-          print("IndexNow:",r.status,len(urls),"urls")
-          PY
+          python -c "import json,sys;b,k=sys.argv[1:];json.dump({'host':b.split('//')[1],'key':k,'keyLocation':f'{b}/{k}.txt','urlList':open('urls.txt').read().split()},open('body.json','w'))" "$BASE" "$KEY"
+          for EP in api.indexnow.org www.bing.com; do   # never fail the run on a ping error
+            CODE=$(curl -s -o resp.txt -w "%{http_code}" -X POST "https://$EP/indexnow" -H "Content-Type: application/json; charset=utf-8" --data-binary @body.json || true)
+            echo "IndexNow $EP -> HTTP $CODE $(head -c 300 resp.txt)"
+            case "$CODE" in 200|202) break;; esac
+          done
   health:              # a failed run emails you automatically
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
